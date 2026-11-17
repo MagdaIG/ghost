@@ -1,6 +1,10 @@
-# 👻 Ghost
+<p align="center">
+  <img src="Assets/AppIcon.png" width="160" alt="Icono de Ghost: un fantasma con los ojos cerrados">
+</p>
 
-**Tu Mac sigue trabajando. La pantalla, no.**
+<h1 align="center">Ghost</h1>
+
+<p align="center"><strong>Tu Mac sigue trabajando. La pantalla, no.</strong></p>
 
 Ghost es una app minimalista para la barra de menú de macOS que mantiene el Mac despierto
 (descargas, servidores, compilaciones, backups, renders…) mientras te deja **apagar la

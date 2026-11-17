@@ -114,7 +114,8 @@ No hay suite de tests: verifica con `swift build` y con el ciclo real
 | `GhostSettingsView.swift` | `GhostSettings` (UserDefaults), ventana de ajustes, grabador de atajos, login item (`SMAppService`). |
 | `Resources/Info.plist` | Excluido de SwiftPM; `install.sh` lo copia a `Ghost.app/Contents/`. |
 | `bin/ghost` | CLI en bash 3.2 (el de macOS). Envía `open -g ghost://…` y lee `~/Library/Application Support/Ghost/status`. |
-| `scripts/make-icon.swift` | Genera `AppIcon.icns` con un SF Symbol (sin binarios en el repo). |
+| `Assets/AppIcon.svg` | Fuente del icono (diseño original). Tras editarlo: `rsvg-convert -w 1024 -h 1024 Assets/AppIcon.svg -o Assets/AppIcon.png`. |
+| `Assets/AppIcon.png` | Icono 1024 px; `install.sh` lo convierte a `AppIcon.icns` con `sips` + `iconutil`. **No uses SF Symbols para el icono de la app**: su licencia lo prohíbe (en la UI sí están permitidos). |
 
 ### Reglas del proyecto
 

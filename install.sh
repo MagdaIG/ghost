@@ -148,10 +148,26 @@ chmod 755 "$STAGED_APP/Contents/Resources/ghost"
 plutil -lint "$STAGED_APP/Contents/Info.plist" >/dev/null || die 13 "Info.plist inválido."
 ok "Estructura del bundle e Info.plist"
 
-if swift "$ROOT/scripts/make-icon.swift" "$STAGED_APP/Contents/Resources/AppIcon.icns" >>"$BUILD_LOG" 2>&1; then
-  ok "Icono generado"
+# Icono: Assets/AppIcon.png (1024 px) → AppIcon.icns con sips + iconutil (incluidos en macOS).
+make_icns() {
+  local source_png="$ROOT/Assets/AppIcon.png"
+  local iconset
+  [ -f "$source_png" ] || return 1
+  iconset="$(mktemp -d "${TMPDIR:-/tmp}/ghost-icon.XXXXXX")/AppIcon.iconset"
+  mkdir -p "$iconset"
+  local size
+  for size in 16 32 128 256 512; do
+    sips -z "$size" "$size" "$source_png" --out "$iconset/icon_${size}x${size}.png" >/dev/null || return 1
+    sips -z $((size * 2)) $((size * 2)) "$source_png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null || return 1
+  done
+  iconutil -c icns "$iconset" -o "$STAGED_APP/Contents/Resources/AppIcon.icns" || return 1
+  rm -rf "$(dirname "$iconset")"
+}
+
+if make_icns >>"$BUILD_LOG" 2>&1; then
+  ok "Icono de la app"
 else
-  warn "No se pudo generar el icono (se usará el genérico). Detalles en $BUILD_LOG"
+  warn "No se pudo crear el icono (se usará el genérico). Detalles en $BUILD_LOG"
 fi
 
 # ---------------------------------------------------------------------------
