@@ -131,6 +131,7 @@ struct GhostMenuBarView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             awakeCard
+            lidCard
             ghostModeButton
             timerSection
             if !controller.triggerReasons.isEmpty {
@@ -202,6 +203,41 @@ struct GhostMenuBarView: View {
             .toggleStyle(.switch)
             .labelsHidden()
             .controlSize(.small)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardFill))
+    }
+
+    // MARK: Tapa cerrada
+
+    private var lidCard: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "laptopcomputer")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(controller.lidModeActive ? .white : .secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Funcionar con la tapa cerrada")
+                    .font(.system(size: 13, weight: .medium))
+                Text(controller.lidAuthorizing
+                     ? "Esperando tu contraseña (solo la primera vez)…"
+                     : "Sobre una mesa, no en una mochila. Se desactiva al apagar Ghost")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if controller.lidAuthorizing {
+                ProgressView().controlSize(.small)
+            } else {
+                Toggle("", isOn: Binding(
+                    get: { controller.lidModeActive },
+                    set: { controller.setLidMode($0) }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .controlSize(.small)
+            }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardFill))

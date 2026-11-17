@@ -104,6 +104,22 @@ irregular.
 Si el MacBook está desenchufado y la batería baja del umbral (20 % por defecto), Ghost se
 desactiva solo y el Mac vuelve a poder dormir.
 
+### Funcionar con la tapa cerrada
+
+Por defecto, macOS duerme el Mac al cerrar la tapa aunque haya apps pidiendo que siga
+despierto. Activa **«Funcionar con la tapa cerrada»** en el panel (o `ghost lid on`) para
+poder cerrarla y seguir usando el Mac en remoto (por ejemplo, desde el teléfono), con
+descargas o servidores en marcha.
+
+- La **primera vez** macOS te pide la contraseña. Ghost instala una regla en
+  `/etc/sudoers.d/ghost` que solo permite ejecutar sin contraseña
+  `pmset -a disablesleep 1` y `pmset -a disablesleep 0`. Nada más.
+- Se desactiva solo al apagar Ghost o «Mantener despierto», al terminar el temporizador
+  y por batería baja. Si Ghost se cerrara de forma inesperada, lo restaura al volver a
+  abrirse (activa el inicio automático con `ghost login on` para más tranquilidad).
+- ⚠️ **Déjalo sobre una mesa, nunca en una mochila o funda**: sin dormir se calienta y
+  gasta batería. Para muchas horas, enchúfalo.
+
 ### Cortina negra
 
 Una alternativa a apagar la pantalla: cubre todas las pantallas con negro puro. Útil con
@@ -120,6 +136,7 @@ ghost on 2h           # durante 2 horas (también: 30, 45m, 1h30m)
 ghost sleep           # Modo Ghost: apaga la pantalla ya
 ghost curtain         # Modo Ghost con cortina negra
 ghost wake            # enciende la pantalla
+ghost lid on|off      # seguir despierto con la tapa cerrada
 ghost off             # vuelve al reposo normal
 ghost status          # estado (añade --json para scripts)
 ghost login on|off    # abrir Ghost al iniciar sesión
@@ -138,6 +155,7 @@ Todo está disponible como URL, así que puedes usarlo desde la app **Atajos** (
 ghost://on            ghost://on?minutes=90     ghost://on?hours=2
 ghost://off           ghost://toggle            ghost://sleep
 ghost://wake          ghost://curtain           ghost://toggle-ghost
+ghost://lid-on        ghost://lid-off           ghost://toggle-lid
 ghost://settings      ghost://quit
 ```
 
@@ -172,8 +190,9 @@ Si Ghost se cierra o falla, macOS libera la aserción automáticamente: nunca de
 ## Limitaciones
 
 - **Tapa cerrada**: sin monitor externo, macOS duerme al cerrar la tapa y ninguna app puede
-  evitarlo con aserciones normales. Con monitor externo + corriente (+ teclado/ratón), el
-  modo clamshell nativo de macOS funciona, y Ghost mantiene el sistema despierto.
+  evitarlo con aserciones normales. Usa «Funcionar con la tapa cerrada» (ver arriba), que
+  requiere tu contraseña una vez. Con monitor externo + corriente, el modo clamshell nativo
+  de macOS también funciona.
 - **Pantalla de bloqueo**: si tienes "Solicitar contraseña al apagar la pantalla", al
   despertar verás el bloqueo. Tus procesos siguen funcionando igualmente.
 - **Entrada segura**: mientras haya un campo de contraseña activo (o Terminal con *Secure

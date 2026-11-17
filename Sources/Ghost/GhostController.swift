@@ -45,6 +45,10 @@ final class GhostController: ObservableObject {
     @Published private(set) var battery = BatteryStatus.unknown
     @Published private(set) var batteryLockout = false
     @Published private(set) var hotkeyRegistered = false
+    /// Modo tapa cerrada pedido por el usuario (solo actúa mientras el Mac está despierto).
+    @Published private(set) var lidModeActive = false
+    /// Mostrando el diálogo de administrador para autorizar el Modo tapa cerrada.
+    @Published private(set) var lidAuthorizing = false
     @Published var notice: String?
 
     /// La UI lo usa para cerrar el popover antes de apagar la pantalla.
@@ -64,6 +68,8 @@ final class GhostController: ObservableObject {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var statusWriteScheduled = false
     private var lastWrittenStatus = ""
+    /// Lo que Ghost aplicó realmente con `pmset disablesleep`.
+    private var lidApplied = false
     private var started = false
 
     private init() {}
@@ -73,6 +79,9 @@ final class GhostController: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
+
+        // Si una ejecución anterior se cerró con la tapa desbloqueada, se restaura ya.
+        GhostLidManager.restoreIfLeftOver()
 
         hotkeys.onPressed = { [weak self] in
             self?.handleHotkey()
@@ -136,6 +145,7 @@ final class GhostController: ObservableObject {
         monitorTimer?.invalidate()
         curtain.hide()
         hotkeys.unregister()
+        if lidApplied, GhostLidManager.setSleepDisabled(false) { lidApplied = false }
         power.releaseAll()
         try? FileManager.default.removeItem(at: Self.statusFileURL)
     }
@@ -173,6 +183,7 @@ final class GhostController: ObservableObject {
 
     func disable() {
         manualAwake = false
+        lidModeActive = false
         selectedDuration = nil
         sessionEndsAt = nil
         sessionTimer?.invalidate()
@@ -182,6 +193,53 @@ final class GhostController: ObservableObject {
 
     func toggleAwake() {
         manualAwake ? disable() : enable(.indefinite)
+    }
+
+    // MARK: - Modo tapa cerrada
+
+    /// Mantiene el Mac despierto también con la tapa cerrada (`pmset disablesleep`).
+    /// La primera vez pide permiso de administrador con el diálogo de macOS.
+    func setLidMode(_ on: Bool) {
+        guard on else {
+            lidModeActive = false
+            reconcile()
+            return
+        }
+        guard !lidAuthorizing else { return }
+        refreshBattery()
+        if batteryLockout {
+            notice = "Modo tapa cerrada no disponible: batería baja sin cargador."
+            return
+        }
+        guard GhostLidManager.isAuthorized else {
+            lidAuthorizing = true
+            Task.detached(priority: .userInitiated) {
+                let result = GhostLidManager.authorize()
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.lidAuthorizing = false
+                    switch result {
+                    case .success:
+                        self.setLidMode(true)
+                    case .failure(.cancelled):
+                        self.notice = "Modo tapa cerrada cancelado: hace falta tu contraseña una vez."
+                    case .failure(.message(let text)):
+                        NSLog("Ghost: no se pudo autorizar el Modo tapa cerrada: %@", text)
+                        self.notice = "No se pudo autorizar el Modo tapa cerrada. Detalles en Console.app (proceso Ghost)."
+                    }
+                }
+            }
+            return
+        }
+        if !manualAwake { enable(.indefinite) }
+        guard manualAwake else { return }
+        lidModeActive = true
+        notice = "Puedes cerrar la tapa: el Mac seguirá despierto. No lo guardes en una mochila o funda."
+        reconcile()
+    }
+
+    func toggleLidMode() {
+        setLidMode(!lidModeActive)
     }
 
     private func sessionExpired() {
@@ -388,9 +446,23 @@ final class GhostController: ObservableObject {
         if !power.setPreventSleep(shouldStayAwake, reason: reason), shouldStayAwake {
             notice = "macOS rechazó la aserción de energía. Revisa Console.app (proceso Ghost)."
         }
+        applyLidMode(lidModeActive && shouldStayAwake)
         let awake = power.isPreventingSleep
         if awake != isAwake { isAwake = awake }
         scheduleStatusWrite()
+    }
+
+    private func applyLidMode(_ wanted: Bool) {
+        guard wanted != lidApplied else { return }
+        if GhostLidManager.setSleepDisabled(wanted) {
+            lidApplied = wanted
+        } else if wanted {
+            lidModeActive = false
+            notice = "No se pudo activar el Modo tapa cerrada. Vuelve a intentarlo para autorizarlo."
+        } else {
+            // Se reintenta en el próximo ciclo (cada 5 s).
+            notice = "No se pudo restaurar el reposo con la tapa cerrada. En Terminal: sudo pmset -a disablesleep 0"
+        }
     }
 
     // MARK: - Texto de estado
@@ -398,6 +470,7 @@ final class GhostController: ObservableObject {
     var statusLine: String {
         if batteryLockout { return "En pausa · batería baja" }
         if ghostModeActive { return curtainVisible ? "Modo Ghost · cortina negra" : "Modo Ghost · pantalla apagada" }
+        if manualAwake, lidModeActive { return "Despierto · también con la tapa cerrada" }
         if manualAwake { return sessionEndsAt == nil ? "Despierto · sin límite" : "Despierto · temporizador" }
         if !triggerReasons.isEmpty { return "Despierto por " + triggerReasons.joined(separator: ", ") }
         return "Inactivo · el Mac duerme con normalidad"
@@ -444,6 +517,12 @@ final class GhostController: ObservableObject {
             exitGhostMode()
         case "toggle-ghost":
             handleHotkey()
+        case "lid-on":
+            setLidMode(true)
+        case "lid-off":
+            setLidMode(false)
+        case "toggle-lid":
+            toggleLidMode()
         case "status", "refresh":
             tick()
         default:
@@ -484,6 +563,7 @@ final class GhostController: ObservableObject {
             "battery=\(battery.percent.map(String.init) ?? "-")",
             "on_ac=\(battery.isOnAC ? 1 : 0)",
             "battery_lockout=\(batteryLockout ? 1 : 0)",
+            "lid=\(lidApplied ? 1 : 0)",
             "hotkey=\(settings.hotkey.display)",
             "hotkey_ok=\(hotkeyRegistered ? 1 : 0)"
         ]
