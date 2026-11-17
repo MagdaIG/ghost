@@ -2,7 +2,8 @@
 # =============================================================================
 #  Ghost — desinstalador
 #  Cierra Ghost (liberando sus aserciones de energía), quita el inicio automático,
-#  borra Ghost.app, el comando `ghost` y la línea de PATH que añadió install.sh.
+#  borra Ghost.app, el comando `ghost`, la línea de PATH que añadió install.sh y la
+#  regla /etc/sudoers.d/ghost del Modo tapa cerrada (si se activó alguna vez).
 #
 #  Uso:  ./uninstall.sh [--purge]
 #        --purge  borra también las preferencias (atajo, triggers, umbrales…)
@@ -64,6 +65,12 @@ if [ "${#APPS[@]}" -gt 0 ] || pgrep -f "$PROC_PATTERN" >/dev/null 2>&1; then
   done
   pkill -f "$PROC_PATTERN" >/dev/null 2>&1 || true
   ok "Ghost cerrado y retirado del inicio de sesión"
+fi
+
+# 1b. Modo tapa cerrada: restaurar el reposo y quitar la regla de sudoers.
+if [ -e /etc/sudoers.d/ghost ]; then
+  sudo -n /usr/bin/pmset -a disablesleep 0 >/dev/null 2>&1 || true
+  remove_path /etc/sudoers.d/ghost
 fi
 
 # 2. App

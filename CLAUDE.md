@@ -74,7 +74,7 @@ prompt de Claude Code el comando con el prefijo `!` (por ejemplo
 | El atajo ⇧⌘G no hace nada | Otra app lo usa (Ajustes de Ghost lo avisa) → cambiarlo en Ajustes. O hay "Entrada segura" activa (campo de contraseña, Terminal con *Secure Keyboard Entry*). Ghost **no** necesita permiso de Accesibilidad: no lo pidas. |
 | La pantalla se enciende sola justo tras apagarla | Movimiento del ratón/trackpad. Ghost ya espera a que se suelten las teclas; pide no tocar el ratón ~1 s. |
 | Al despertar pide contraseña | Es la pantalla de bloqueo de macOS (Ajustes › Pantalla de bloqueo › "Solicitar contraseña"). Ghost no la toca; los procesos siguieron funcionando. |
-| Con tapa cerrada el Mac se duerme | Esperado sin monitor externo + corriente: macOS no permite evitarlo con aserciones de usuario. Ver README › Limitaciones. |
+| Con tapa cerrada el Mac se duerme | Activar «Funcionar con la tapa cerrada» en el panel o `ghost lid on` (pide la contraseña una vez con el diálogo de macOS; no uses `sudo` en la terminal). Si sigue: `pmset -g \| grep SleepDisabled` debe dar 1. |
 | `ghost: command not found` | Abrir terminal nueva, o usar `/Applications/Ghost.app/Contents/Resources/ghost`. |
 
 ### Desinstalar
@@ -110,6 +110,7 @@ No hay suite de tests: verifica con `swift build` y con el ciclo real
 | `GhostPowerManager.swift` | IOKit: aserción `PreventUserIdleSystemSleep`, `pmset displaysleepnow` (+ fallback `IORequestIdle`), `IOPMAssertionDeclareUserActivity` para despertar, lectura de batería (`IOPS*`), muestreo de CPU (`host_statistics`) y red (`getifaddrs`). |
 | `GhostHotkeyManager.swift` | Atajo global con Carbon `RegisterEventHotKey` (consume la tecla, sin permisos TCC) y `GhostShortcut`. |
 | `BlackCurtainManager.swift` | Ventanas negras a nivel salvapantallas en todas las pantallas. |
+| `GhostLidManager.swift` | Modo tapa cerrada: `pmset -a disablesleep 0/1` vía `sudo -n`, regla `/etc/sudoers.d/ghost` instalada una vez con `osascript … with administrator privileges`, y restauración si quedó activo. |
 | `GhostMenuBarView.swift` | Popover SwiftUI y `GhostIcon` (fantasma de la barra de menú dibujado con `NSBezierPath` a partir de `AppIcon.svg`). |
 | `GhostSettingsView.swift` | `GhostSettings` (UserDefaults), ventana de ajustes, grabador de atajos, login item (`SMAppService`). |
 | `Resources/Info.plist` | Excluido de SwiftPM; `install.sh` lo copia a `Ghost.app/Contents/`. |
@@ -124,6 +125,7 @@ No hay suite de tests: verifica con `swift build` y con el ciclo real
 - **No uses CGEventTap ni APIs que requieran permisos TCC** (Accesibilidad / Monitorización
   de entrada): con firma ad-hoc el permiso se invalida en cada recompilación.
 - **Nunca crees `PreventUserIdleDisplaySleep`**: rompería la idea de "pantalla apagable".
+- **Modo tapa cerrada:** la regla de sudoers solo puede permitir exactamente `/usr/bin/pmset -a disablesleep 0` y `… 1`. No la amplíes. Toda salida de la sesión (off, temporizador, batería, quit) debe dejar `disablesleep 0`.
 - Swift tools 5.9, macOS 14+. Todo el estado de UI vive en clases `@MainActor`; las vistas
   se anotan `@MainActor` para compilar igual con SDKs de Xcode 15 y 16.
 - `bin/ghost` debe seguir siendo compatible con bash 3.2 (sin `mapfile`, sin arrays asociativos).
