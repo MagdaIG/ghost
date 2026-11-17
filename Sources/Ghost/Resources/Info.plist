@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ghost.app/Contents/Info.plist (lo copia install.sh).
+
+  Permisos: Ghost NO necesita claves de privacidad (NS*UsageDescription) ni permiso de
+  Accesibilidad. El atajo global usa RegisterEventHotKey (Carbon), que consume la tecla
+  sin que llegue a otras apps y no requiere permisos TCC. La app no usa App Sandbox:
+  la firma ad-hoc sin entitlements permite acceso completo a IOKit y a /usr/bin/pmset.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>es</string>
+	<key>CFBundleExecutable</key>
+	<string>Ghost</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.ghost.Ghost</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Ghost</string>
+	<key>CFBundleDisplayName</key>
+	<string>Ghost</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Ghost · Código abierto bajo licencia MIT</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.ghost.Ghost</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ghost</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

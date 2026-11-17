@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# ghost — controla Ghost.app desde la terminal.
+# Envía comandos por el URL scheme ghost:// y lee el estado que la app publica en
+# ~/Library/Application Support/Ghost/status. Compatible con el bash 3.2 de macOS.
+
+set -euo pipefail
+
+VERSION="1.0.0"
+BUNDLE_ID="dev.ghost.Ghost"
+STATUS_FILE="$HOME/Library/Application Support/Ghost/status"
+PROC_PATTERN="Ghost.app/Contents/MacOS/Ghost"
+
+usage() {
+  cat <<'EOF'
+👻 ghost — mantén el Mac despierto con la pantalla apagada
+
+Uso:
+  ghost on [duración]   Mantener el Mac despierto (sin límite, o p. ej. 30, 45m, 2h, 1h30m)
+  ghost off             Volver al reposo normal (y salir del Modo Ghost)
+  ghost toggle          Alternar "mantener despierto"
+  ghost sleep           Modo Ghost: mantener despierto y apagar la pantalla ya
+  ghost curtain         Modo Ghost con cortina negra (ideal para VNC / Compartir Pantalla)
+  ghost wake            Encender la pantalla y salir del Modo Ghost
+  ghost status [--json] Ver el estado actual
+  ghost login on|off    Abrir Ghost al iniciar sesión (sí/no)
+  ghost settings        Abrir la ventana de ajustes
+  ghost launch          Iniciar Ghost.app
+  ghost quit            Cerrar Ghost.app (libera todas las aserciones de energía)
+  ghost version         Mostrar la versión
+
+Ejemplos:
+  ghost on 2h && ghost sleep     # 2 horas despierto con la pantalla apagada
+  ghost status --json
+EOF
+}
+
+is_running() {
+  pgrep -f "$PROC_PATTERN" >/dev/null 2>&1
+}
+
+wait_until_running() {
+  local i
+  for i in $(seq 1 30); do
+    is_running && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+send() {
+  local was_running=1
+  is_running || was_running=0
+  if ! open -g "ghost://$1" 2>/dev/null; then
+    echo "✖ No se pudo contactar con Ghost.app. ¿Está instalada? Ejecuta ./install.sh en el repositorio." >&2
+    exit 1
+  fi
+  if [ "$was_running" -eq 0 ]; then
+    wait_until_running || true
+    sleep 1
+  fi
+  sleep 0.6
+}
+
+# Convierte "30", "45m", "2h", "1h30m" a minutos.
+parse_minutes() {
+  local input
+  input="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -gt 0 ]; then
+    echo "$input"
+    return 0
+  fi
+  if [[ "$input" =~ ^(([0-9]+)h)?(([0-9]+)m(in)?)?$ ]] && [ -n "$input" ]; then
+    local hours="${BASH_REMATCH[2]:-0}"
+    local minutes="${BASH_REMATCH[4]:-0}"
+    local total=$(( hours * 60 + minutes ))
+    if [ "$total" -gt 0 ]; then
+      echo "$total"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+format_remaining() {
+  local seconds="$1"
+  if [ "$seconds" -le 0 ]; then
+    echo "terminando"
+    return
+  fi
+  local h=$(( seconds / 3600 ))
+  local m=$(( (seconds % 3600) / 60 ))
+  local s=$(( seconds % 60 ))
+  if [ "$h" -gt 0 ]; then
+    printf '%dh %02dm' "$h" "$m"
+  elif [ "$m" -gt 0 ]; then
+    printf '%dm %02ds' "$m" "$s"
+  else
+    printf '%ds' "$s"
+  fi
+}
+
+print_status() {
+  local json=0
+  [ "${1:-}" = "--json" ] && json=1
+
+  local running=0 awake=0 manual=0 ghost_mode=0 display_asleep=0 curtain=0 ends_at=0
+  local triggers="" has_battery=0 battery="-" on_ac=1 battery_lockout=0 hotkey="" hotkey_ok=1
+
+  if is_running && [ -f "$STATUS_FILE" ]; then
+    running=1
+    local key value
+    while IFS='=' read -r key value; do
+      case "$key" in
+        awake) awake="$value" ;;
+        manual) manual="$value" ;;
+        ghost_mode) ghost_mode="$value" ;;
+        display_asleep) display_asleep="$value" ;;
+        curtain) curtain="$value" ;;
+        ends_at) ends_at="$value" ;;
+        triggers) triggers="$value" ;;
+        has_battery) has_battery="$value" ;;
+        battery) battery="$value" ;;
+        on_ac) on_ac="$value" ;;
+        battery_lockout) battery_lockout="$value" ;;
+        hotkey) hotkey="$value" ;;
+        hotkey_ok) hotkey_ok="$value" ;;
+      esac
+    done < "$STATUS_FILE"
+  elif is_running; then
+    running=1
+  fi
+
+  local remaining=0
+  if [ "$ends_at" -gt 0 ] 2>/dev/null; then
+    remaining=$(( ends_at - $(date +%s) ))
+    [ "$remaining" -lt 0 ] && remaining=0
+  fi
+
+  if [ "$json" -eq 1 ]; then
+    printf '{"running":%s,"awake":%s,"manual":%s,"ghost_mode":%s,"display_asleep":%s,"curtain":%s,"remaining_seconds":%s,"triggers":"%s","has_battery":%s,"battery":"%s","on_ac":%s,"battery_lockout":%s,"hotkey":"%s","hotkey_registered":%s}\n' \
+      "$(tf "$running")" "$(tf "$awake")" "$(tf "$manual")" "$(tf "$ghost_mode")" "$(tf "$display_asleep")" \
+      "$(tf "$curtain")" "$remaining" "$triggers" "$(tf "$has_battery")" "$battery" "$(tf "$on_ac")" \
+      "$(tf "$battery_lockout")" "$hotkey" "$(tf "$hotkey_ok")"
+    return 0
+  fi
+
+  if [ "$running" -eq 0 ]; then
+    echo "👻 Ghost no está en ejecución. Inícialo con: ghost launch"
+    return 0
+  fi
+
+  local awake_text="no (el Mac duerme con normalidad)"
+  if [ "$awake" -eq 1 ]; then
+    if [ "$manual" -eq 1 ] && [ "$ends_at" -gt 0 ]; then
+      awake_text="sí · temporizador, quedan $(format_remaining "$remaining")"
+    elif [ "$manual" -eq 1 ]; then
+      awake_text="sí · sin límite"
+    else
+      awake_text="sí · por triggers"
+    fi
+  fi
+
+  local ghost_text="inactivo"
+  if [ "$ghost_mode" -eq 1 ]; then
+    if [ "$curtain" -eq 1 ]; then ghost_text="activo (cortina negra)"; else ghost_text="activo (pantalla apagada)"; fi
+  fi
+
+  local battery_text="sin batería (corriente)"
+  if [ "$has_battery" -eq 1 ]; then
+    if [ "$on_ac" -eq 1 ]; then battery_text="${battery}% · con cargador"; else battery_text="${battery}% · con batería"; fi
+  fi
+  [ "$battery_lockout" -eq 1 ] && battery_text="$battery_text · ⚠ Ghost en pausa por batería baja"
+
+  local hotkey_text="$hotkey"
+  [ "$hotkey_ok" -eq 1 ] || hotkey_text="$hotkey (⚠ en uso por otra app)"
+
+  echo "👻 Ghost"
+  echo "  Mac despierto : $awake_text"
+  echo "  Modo Ghost    : $ghost_text"
+  if [ "$display_asleep" -eq 1 ]; then echo "  Pantalla      : apagada"; else echo "  Pantalla      : encendida"; fi
+  echo "  Triggers      : ${triggers:-ninguno}"
+  echo "  Batería       : $battery_text"
+  echo "  Atajo         : $hotkey_text"
+}
+
+tf() {
+  if [ "$1" = "1" ]; then echo true; else echo false; fi
+}
+
+command="${1:-status}"
+[ $# -gt 0 ] && shift
+
+case "$command" in
+  on|start|enable)
+    if [ $# -gt 0 ]; then
+      if ! minutes="$(parse_minutes "$1")"; then
+        echo "✖ Duración no válida: '$1'. Usa por ejemplo 30, 45m, 2h o 1h30m." >&2
+        exit 2
+      fi
+      send "on?minutes=$minutes"
+    else
+      send "on"
+    fi
+    print_status
+    ;;
+  off|stop|disable) send "off"; print_status ;;
+  toggle) send "toggle"; print_status ;;
+  sleep|ghost|dark) send "sleep" ;;
+  curtain) send "curtain" ;;
+  wake) send "wake"; print_status ;;
+  status) print_status "${1:-}" ;;
+  login)
+    case "${1:-}" in
+      on) send "login-on"; echo "✔ Ghost se abrirá al iniciar sesión." ;;
+      off) send "login-off"; echo "✔ Ghost ya no se abrirá al iniciar sesión." ;;
+      *) echo "Uso: ghost login on|off" >&2; exit 2 ;;
+    esac
+    ;;
+  settings|preferences) send "settings" ;;
+  launch|open) open -g -b "$BUNDLE_ID" && wait_until_running && echo "✔ Ghost está en ejecución." ;;
+  quit) if is_running; then open -g "ghost://quit"; echo "✔ Ghost cerrado."; else echo "Ghost no estaba en ejecución."; fi ;;
+  version|--version|-v) echo "ghost $VERSION" ;;
+  help|--help|-h) usage ;;
+  *) usage >&2; exit 2 ;;
+esac
