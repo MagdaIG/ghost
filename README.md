@@ -141,6 +141,9 @@ ghost://wake          ghost://curtain           ghost://toggle-ghost
 ghost://settings      ghost://quit
 ```
 
+Las duraciones temporizadas (`minutes`, `hours` y `ghost on <duración>`) van de 1 minuto a
+30 días; una duración no válida se ignora. Para más tiempo usa `ghost on` sin duración.
+
 En Atajos también puedes usar «Ejecutar script de shell» con `/usr/local/bin/ghost sleep`.
 
 ---

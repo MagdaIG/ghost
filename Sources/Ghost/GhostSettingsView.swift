@@ -476,7 +476,7 @@ struct ShortcutRecorder: View {
         monitor = nil
         guard isRecording else { return }
         isRecording = false
-        GhostHotkeyManager.shared.register(settings.hotkey)
+        GhostController.shared.reregisterHotkey()
     }
 }
 
