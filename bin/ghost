@@ -61,24 +61,44 @@ send() {
   sleep 0.6
 }
 
-# Convierte "30", "45m", "2h", "1h30m" a minutos.
+MAX_MINUTES=43200 # 30 días; igual que GhostController.maxSessionMinutes
+
+# Convierte "30", "45m", "2h", "1h30m" a minutos (1…MAX_MINUTES).
+# Los números se fuerzan a base 10 ("08" no es octal) y se limitan a 6 cifras para
+# que la aritmética de bash no desborde.
 parse_minutes() {
-  local input
+  local input hours=0 minutes=0
   input="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -gt 0 ]; then
-    echo "$input"
+  if [[ "$input" =~ ^[0-9]{1,6}$ ]]; then
+    minutes="$input"
+  elif [[ "$input" =~ ^(([0-9]{1,6})h)?(([0-9]{1,6})m(in)?)?$ ]] && [ -n "$input" ]; then
+    hours="${BASH_REMATCH[2]:-0}"
+    minutes="${BASH_REMATCH[4]:-0}"
+  else
+    return 1
+  fi
+  local total=$(( 10#$hours * 60 + 10#$minutes ))
+  if [ "$total" -gt 0 ] && [ "$total" -le "$MAX_MINUTES" ]; then
+    echo "$total"
     return 0
   fi
-  if [[ "$input" =~ ^(([0-9]+)h)?(([0-9]+)m(in)?)?$ ]] && [ -n "$input" ]; then
-    local hours="${BASH_REMATCH[2]:-0}"
-    local minutes="${BASH_REMATCH[4]:-0}"
-    local total=$(( hours * 60 + minutes ))
-    if [ "$total" -gt 0 ]; then
-      echo "$total"
-      return 0
-    fi
-  fi
   return 1
+}
+
+# Escapa un valor para incluirlo entre comillas en JSON.
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\t'/\\t}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\n'/\\n}"
+  printf '%s' "$s"
+}
+
+# Devuelve el valor si es un entero (posiblemente negativo); si no, 0.
+int_or_zero() {
+  if [[ "$1" =~ ^-?[0-9]+$ ]]; then printf '%s' "$1"; else printf '0'; fi
 }
 
 format_remaining() {
@@ -139,8 +159,8 @@ print_status() {
   if [ "$json" -eq 1 ]; then
     printf '{"running":%s,"awake":%s,"manual":%s,"ghost_mode":%s,"display_asleep":%s,"curtain":%s,"remaining_seconds":%s,"triggers":"%s","has_battery":%s,"battery":"%s","on_ac":%s,"battery_lockout":%s,"hotkey":"%s","hotkey_registered":%s}\n' \
       "$(tf "$running")" "$(tf "$awake")" "$(tf "$manual")" "$(tf "$ghost_mode")" "$(tf "$display_asleep")" \
-      "$(tf "$curtain")" "$remaining" "$triggers" "$(tf "$has_battery")" "$battery" "$(tf "$on_ac")" \
-      "$(tf "$battery_lockout")" "$hotkey" "$(tf "$hotkey_ok")"
+      "$(tf "$curtain")" "$(int_or_zero "$remaining")" "$(json_escape "$triggers")" "$(tf "$has_battery")" \
+      "$(json_escape "$battery")" "$(tf "$on_ac")" "$(tf "$battery_lockout")" "$(json_escape "$hotkey")" "$(tf "$hotkey_ok")"
     return 0
   fi
 
@@ -194,7 +214,7 @@ case "$command" in
   on|start|enable)
     if [ $# -gt 0 ]; then
       if ! minutes="$(parse_minutes "$1")"; then
-        echo "✖ Duración no válida: '$1'. Usa por ejemplo 30, 45m, 2h o 1h30m." >&2
+        echo "✖ Duración no válida: '$1'. Usa por ejemplo 30, 45m, 2h o 1h30m (máximo 30 días)." >&2
         exit 2
       fi
       send "on?minutes=$minutes"

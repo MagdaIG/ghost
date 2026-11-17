@@ -52,6 +52,8 @@ final class GhostController: ObservableObject {
 
     static let monitorInterval: TimeInterval = 5
     static let triggerCooldown: TimeInterval = 60
+    /// Tope de una sesión temporizada (30 días). Más allá, usar "sin límite".
+    static let maxSessionMinutes = 30 * 24 * 60
 
     private var sessionTimer: Timer?
     private var monitorTimer: Timer?
@@ -184,10 +186,12 @@ final class GhostController: ObservableObject {
 
     private func sessionExpired() {
         guard manualAwake, let end = sessionEndsAt, Date() >= end.addingTimeInterval(-1) else { return }
-        if curtain.isVisible {
-            curtain.hide()
-            ghostModeActive = false
-        }
+        // Sin sesión despierta no hay Modo Ghost: se sale de él aunque la pantalla siga apagada
+        // (no se enciende; solo deja de reportarse "Modo Ghost activo").
+        pendingDisplaySleep?.cancel()
+        pendingDisplaySleep = nil
+        if curtain.isVisible { curtain.hide() }
+        ghostModeActive = false
         disable()
         notice = "Temporizador terminado: el Mac vuelve a su reposo normal."
     }
@@ -287,6 +291,12 @@ final class GhostController: ObservableObject {
 
     private func registerHotkey(_ shortcut: GhostShortcut) {
         hotkeyRegistered = hotkeys.register(shortcut)
+    }
+
+    /// Vuelve a registrar el atajo guardado (p. ej. al terminar de grabar uno nuevo) y
+    /// mantiene `hotkeyRegistered` coherente con el registro real.
+    func reregisterHotkey() {
+        registerHotkey(settings.hotkey)
     }
 
     // MARK: - Monitorización, triggers y batería
@@ -408,10 +418,16 @@ final class GhostController: ObservableObject {
 
         switch Self.command(from: url) {
         case "on", "enable", "start":
-            if let minutes = value("minutes").flatMap(Int.init), minutes > 0 {
-                enable(GhostDuration(minutes: minutes))
-            } else if let hours = value("hours").flatMap(Double.init), hours > 0 {
-                enable(GhostDuration(minutes: max(1, Int(hours * 60))))
+            if let raw = value("minutes") ?? value("hours") {
+                // Cualquier app o web puede abrir ghost://: valida antes de convertir a Int
+                // (un valor enorme o "inf" desbordaría y cerraría la app).
+                let isHours = value("minutes") == nil
+                guard let number = Double(raw), number.isFinite, number > 0 else {
+                    NSLog("Ghost: duración no válida en %@", url.absoluteString)
+                    return true
+                }
+                let minutes = min(isHours ? number * 60 : number, Double(Self.maxSessionMinutes))
+                enable(GhostDuration(minutes: max(1, Int(minutes))))
             } else {
                 enable(.indefinite)
             }

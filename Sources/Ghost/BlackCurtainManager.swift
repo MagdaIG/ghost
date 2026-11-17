@@ -114,10 +114,12 @@ final class CurtainWindow: NSWindow {
             ])
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
-                NSAnimationContext.runAnimationGroup { context in
+                // Forma explícita con completionHandler: con el SDK de Swift 6.3 el cierre final
+                // elige la sobrecarga async y no compila.
+                NSAnimationContext.runAnimationGroup({ context in
                     context.duration = 1.2
                     label.animator().alphaValue = 0
-                }
+                }, completionHandler: nil)
             }
         }
         return window
