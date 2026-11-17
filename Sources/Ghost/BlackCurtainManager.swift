@@ -114,10 +114,10 @@ final class CurtainWindow: NSWindow {
             ])
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
-                NSAnimationContext.runAnimationGroup { context in
+                NSAnimationContext.runAnimationGroup({ context in
                     context.duration = 1.2
                     label.animator().alphaValue = 0
-                }
+                }, completionHandler: nil)
             }
         }
         return window
