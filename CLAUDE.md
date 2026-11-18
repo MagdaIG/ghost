@@ -107,7 +107,7 @@ No hay suite de tests: verifica con `swift build` y con el ciclo real
 |---|---|
 | `GhostApp.swift` | `@main`, `AppDelegate`, `NSStatusItem` + `NSPopover`, ventana de ajustes, menú principal (⌘C/⌘V), URL scheme `ghost://`. |
 | `GhostController.swift` | Cerebro. Estado publicado, temporizador, triggers (apps/CPU/red), protección de batería, Modo Ghost, `reconcile()` (única fuente de verdad de la aserción) y archivo de estado para el CLI. |
-| `GhostPowerManager.swift` | IOKit: aserción `PreventUserIdleSystemSleep`, `pmset displaysleepnow` (+ fallback `IORequestIdle`), `IOPMAssertionDeclareUserActivity` para despertar, lectura de batería (`IOPS*`), muestreo de CPU (`host_statistics`) y red (`getifaddrs`). |
+| `GhostPowerManager.swift` | IOKit: aserciones `PreventUserIdleSystemSleep` y (Modo Sonámbulo) `PreventUserIdleDisplaySleep`, `pmset displaysleepnow` (+ fallback `IORequestIdle`), `IOPMAssertionDeclareUserActivity` para despertar, lectura de batería (`IOPS*`), muestreo de CPU (`host_statistics`) y red (`getifaddrs`). |
 | `GhostHotkeyManager.swift` | Atajo global con Carbon `RegisterEventHotKey` (consume la tecla, sin permisos TCC) y `GhostShortcut`. |
 | `BlackCurtainManager.swift` | Ventanas negras a nivel salvapantallas en todas las pantallas. |
 | `GhostLidManager.swift` | Modo tapa cerrada: `pmset -a disablesleep 0/1` vía `sudo -n`, regla `/etc/sudoers.d/ghost` instalada una vez con `osascript … with administrator privileges`, y restauración si quedó activo. |
@@ -124,7 +124,7 @@ No hay suite de tests: verifica con `swift build` y con el ciclo real
 - **Sin App Sandbox** y firma **ad-hoc** (`codesign --sign -`). No añadas entitlements.
 - **No uses CGEventTap ni APIs que requieran permisos TCC** (Accesibilidad / Monitorización
   de entrada): con firma ad-hoc el permiso se invalida en cada recompilación.
-- **Nunca crees `PreventUserIdleDisplaySleep`**: rompería la idea de "pantalla apagable".
+- **`PreventUserIdleDisplaySleep` solo en Modo Sonámbulo** (opción explícita) y nunca durante el Modo Ghost: `reconcile()` la suelta mientras `ghostModeActive` para que la pantalla se pueda apagar. Fuera de ese modo, nunca la crees.
 - **Modo tapa cerrada:** la regla de sudoers solo puede permitir exactamente `/usr/bin/pmset -a disablesleep 0` y `… 1`. No la amplíes. Toda salida de la sesión (off, temporizador, batería, quit) debe dejar `disablesleep 0`.
 - Swift tools 5.9, macOS 14+. Todo el estado de UI vive en clases `@MainActor`; las vistas
   se anotan `@MainActor` para compilar igual con SDKs de Xcode 15 y 16.

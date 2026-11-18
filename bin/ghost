@@ -21,6 +21,7 @@ Uso:
   ghost sleep           Modo Ghost: mantener despierto y apagar la pantalla ya
   ghost curtain         Modo Ghost con cortina negra (ideal para VNC / Compartir Pantalla)
   ghost wake            Encender la pantalla y salir del Modo Ghost
+  ghost sonambulo on|off  Modo Sonámbulo: mantener también la pantalla encendida
   ghost lid on|off      Seguir despierto también con la tapa cerrada (pide contraseña la 1.ª vez)
   ghost status [--json] Ver el estado actual
   ghost login on|off    Abrir Ghost al iniciar sesión (sí/no)
@@ -125,7 +126,7 @@ print_status() {
   [ "${1:-}" = "--json" ] && json=1
 
   local running=0 awake=0 manual=0 ghost_mode=0 display_asleep=0 curtain=0 ends_at=0
-  local triggers="" has_battery=0 battery="-" on_ac=1 battery_lockout=0 hotkey="" hotkey_ok=1 lid=0
+  local triggers="" has_battery=0 battery="-" on_ac=1 battery_lockout=0 hotkey="" hotkey_ok=1 lid=0 sleepwalker=0
 
   if is_running && [ -f "$STATUS_FILE" ]; then
     running=1
@@ -146,6 +147,7 @@ print_status() {
         hotkey) hotkey="$value" ;;
         hotkey_ok) hotkey_ok="$value" ;;
         lid) lid="$value" ;;
+        sleepwalker) sleepwalker="$value" ;;
       esac
     done < "$STATUS_FILE"
   elif is_running; then
@@ -159,10 +161,10 @@ print_status() {
   fi
 
   if [ "$json" -eq 1 ]; then
-    printf '{"running":%s,"awake":%s,"manual":%s,"ghost_mode":%s,"display_asleep":%s,"curtain":%s,"remaining_seconds":%s,"triggers":"%s","has_battery":%s,"battery":"%s","on_ac":%s,"battery_lockout":%s,"hotkey":"%s","hotkey_registered":%s,"lid_closed_mode":%s}\n' \
+    printf '{"running":%s,"awake":%s,"manual":%s,"ghost_mode":%s,"display_asleep":%s,"curtain":%s,"remaining_seconds":%s,"triggers":"%s","has_battery":%s,"battery":"%s","on_ac":%s,"battery_lockout":%s,"hotkey":"%s","hotkey_registered":%s,"lid_closed_mode":%s,"sleepwalker":%s}\n' \
       "$(tf "$running")" "$(tf "$awake")" "$(tf "$manual")" "$(tf "$ghost_mode")" "$(tf "$display_asleep")" \
       "$(tf "$curtain")" "$(int_or_zero "$remaining")" "$(json_escape "$triggers")" "$(tf "$has_battery")" \
-      "$(json_escape "$battery")" "$(tf "$on_ac")" "$(tf "$battery_lockout")" "$(json_escape "$hotkey")" "$(tf "$hotkey_ok")" "$(tf "$lid")"
+      "$(json_escape "$battery")" "$(tf "$on_ac")" "$(tf "$battery_lockout")" "$(json_escape "$hotkey")" "$(tf "$hotkey_ok")" "$(tf "$lid")" "$(tf "$sleepwalker")"
     return 0
   fi
 
@@ -200,6 +202,7 @@ print_status() {
   echo "  Mac despierto : $awake_text"
   echo "  Modo Ghost    : $ghost_text"
   if [ "$display_asleep" -eq 1 ]; then echo "  Pantalla      : apagada"; else echo "  Pantalla      : encendida"; fi
+  if [ "$sleepwalker" = "1" ]; then echo "  Sonámbulo     : sí (la pantalla no se apaga sola)"; else echo "  Sonámbulo     : no"; fi
   if [ "$lid" = "1" ]; then echo "  Tapa cerrada  : sigue despierto (no lo guardes en una mochila)"; else echo "  Tapa cerrada  : el Mac se duerme"; fi
   echo "  Triggers      : ${triggers:-ninguno}"
   echo "  Batería       : $battery_text"
@@ -232,6 +235,13 @@ case "$command" in
   curtain) send "curtain" ;;
   wake) send "wake"; print_status ;;
   status) print_status "${1:-}" ;;
+  sonambulo|sonámbulo|sleepwalker)
+    case "${1:-}" in
+      on) send "sonambulo-on"; print_status ;;
+      off) send "sonambulo-off"; print_status ;;
+      *) echo "Uso: ghost sonambulo on|off" >&2; exit 2 ;;
+    esac
+    ;;
   lid)
     case "${1:-}" in
       on)
