@@ -7,14 +7,16 @@ import SwiftUI
 ///
 /// - Inactivo: contorno con ojos abiertos (el botón además aparece atenuado).
 /// - Mac despierto: fantasma relleno con ojos abiertos.
+/// - Modo Sonámbulo: relleno con ojos abiertos y una "z" (dormido, pero con la pantalla viva).
 /// - Modo Ghost: fantasma relleno con los ojos cerrados (pantalla apagada, Mac vivo).
 /// - Pausa por batería baja: SF Symbol `battery.25percent`.
 enum GhostIcon {
-    enum State { case idle, awake, ghost, lockout }
+    enum State { case idle, awake, sleepwalker, ghost, lockout }
 
-    static func state(isAwake: Bool, ghostMode: Bool, lockout: Bool) -> State {
+    static func state(isAwake: Bool, ghostMode: Bool, lockout: Bool, sleepwalker: Bool = false) -> State {
         if lockout { return .lockout }
         if ghostMode { return .ghost }
+        if sleepwalker, isAwake { return .sleepwalker }
         if isAwake { return .awake }
         return .idle
     }
@@ -41,46 +43,50 @@ enum GhostIcon {
 
     /// Escala la silueta del SVG (x 322…702, y 296…792) a 16 pt de alto, centrada en 18×18.
     private static let scale: CGFloat = 16 / 496
-    private static let origin = NSPoint(x: (18 - 380 * scale) / 2, y: 1)
+    private static let originX: CGFloat = (18 - 380 * scale) / 2
 
-    private static func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-        NSPoint(x: origin.x + (x - 322) * scale, y: origin.y + (y - 296) * scale)
+    /// `dx` desplaza el fantasma (en Sonámbulo se corre a la izquierda para dejar sitio a la "z").
+    private static func point(_ x: CGFloat, _ y: CGFloat, dx: CGFloat) -> NSPoint {
+        NSPoint(x: originX + dx + (x - 322) * scale, y: 1 + (y - 296) * scale)
     }
 
-    private static func bodyPath() -> NSBezierPath {
+    private static func bodyPath(dx: CGFloat) -> NSBezierPath {
+        func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { point(x, y, dx: dx) }
         let path = NSBezierPath()
-        path.move(to: point(322, 528))
-        path.curve(to: point(512, 296), controlPoint1: point(322, 398), controlPoint2: point(406, 296))
-        path.curve(to: point(702, 528), controlPoint1: point(618, 296), controlPoint2: point(702, 398))
-        path.line(to: point(702, 748))
+        path.move(to: p(322, 528))
+        path.curve(to: p(512, 296), controlPoint1: p(322, 398), controlPoint2: p(406, 296))
+        path.curve(to: p(702, 528), controlPoint1: p(618, 296), controlPoint2: p(702, 398))
+        path.line(to: p(702, 748))
         // Tres ondas en la base (medias elipses rx 63.33, ry 44), de derecha a izquierda.
         let rx: CGFloat = 63.33, ry: CGFloat = 44, top: CGFloat = 748, k: CGFloat = 0.5523
         for cx in [638.67, 512, 385.33] as [CGFloat] {
-            path.curve(to: point(cx, top + ry),
-                       controlPoint1: point(cx + rx, top + k * ry),
-                       controlPoint2: point(cx + k * rx, top + ry))
-            path.curve(to: point(cx - rx, top),
-                       controlPoint1: point(cx - k * rx, top + ry),
-                       controlPoint2: point(cx - rx, top + k * ry))
+            path.curve(to: p(cx, top + ry),
+                       controlPoint1: p(cx + rx, top + k * ry),
+                       controlPoint2: p(cx + k * rx, top + ry))
+            path.curve(to: p(cx - rx, top),
+                       controlPoint1: p(cx - k * rx, top + ry),
+                       controlPoint2: p(cx - rx, top + k * ry))
         }
         path.close()
         return path
     }
 
-    private static let eyeCenters = [point(450, 515), point(574, 515)]
+    private static func eyeCenters(dx: CGFloat) -> [NSPoint] {
+        [point(450, 515, dx: dx), point(574, 515, dx: dx)]
+    }
 
-    private static func openEyes() -> NSBezierPath {
+    private static func openEyes(dx: CGFloat) -> NSBezierPath {
         let path = NSBezierPath()
-        for center in eyeCenters {
+        for center in eyeCenters(dx: dx) {
             path.appendOval(in: NSRect(x: center.x - 1, y: center.y - 1.35, width: 2, height: 2.7))
         }
         return path
     }
 
     /// Ojos cerrados "‿ ‿" como en el icono de la app.
-    private static func closedEyes() -> NSBezierPath {
+    private static func closedEyes(dx: CGFloat) -> NSBezierPath {
         let path = NSBezierPath()
-        for center in eyeCenters {
+        for center in eyeCenters(dx: dx) {
             let half: CGFloat = 1.35, dip: CGFloat = 1.2
             let start = NSPoint(x: center.x - half, y: center.y - dip / 2)
             let end = NSPoint(x: center.x + half, y: center.y - dip / 2)
@@ -97,21 +103,43 @@ enum GhostIcon {
         return path
     }
 
+    /// "z" pequeña arriba a la derecha (Modo Sonámbulo).
+    private static func sleepyZ() -> NSBezierPath {
+        let path = NSBezierPath()
+        let left: CGFloat = 13.6, right: CGFloat = 17.2, top: CGFloat = 0.9, bottom: CGFloat = 4.5
+        path.move(to: NSPoint(x: left, y: top))
+        path.line(to: NSPoint(x: right, y: top))
+        path.line(to: NSPoint(x: left, y: bottom))
+        path.line(to: NSPoint(x: right, y: bottom))
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        return path
+    }
+
     private static func drawGhost(_ state: State) {
         NSColor.black.set()
-        let body = bodyPath()
+        let dx: CGFloat = state == .sleepwalker ? -1.6 : 0
+        let body = bodyPath(dx: dx)
         switch state {
         case .idle:
             body.lineWidth = 1.3
             body.lineJoinStyle = .round
             body.stroke()
-            openEyes().fill()
-        case .awake, .ghost:
+            openEyes(dx: dx).fill()
+        case .awake, .sleepwalker, .ghost:
             body.fill()
             // Los ojos se recortan del relleno para que se vea el fondo de la barra.
             NSGraphicsContext.current?.compositingOperation = .destinationOut
-            if state == .awake { openEyes().fill() } else { closedEyes().stroke() }
+            if state == .ghost { closedEyes(dx: dx).stroke() } else { openEyes(dx: dx).fill() }
+            if state == .sleepwalker {
+                // Margen transparente alrededor de la "z" para separarla de la cabeza.
+                let gap = sleepyZ()
+                gap.lineWidth = 3
+                gap.stroke()
+            }
             NSGraphicsContext.current?.compositingOperation = .sourceOver
+            if state == .sleepwalker { sleepyZ().stroke() }
         case .lockout:
             break
         }
@@ -160,7 +188,8 @@ struct GhostMenuBarView: View {
                     .frame(width: 40, height: 40)
                 Image(nsImage: GhostIcon.image(for: GhostIcon.state(isAwake: controller.isAwake,
                                                                     ghostMode: controller.ghostModeActive,
-                                                                    lockout: controller.batteryLockout)))
+                                                                    lockout: controller.batteryLockout,
+                                                                    sleepwalker: controller.sleepwalkerActive)))
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
@@ -189,17 +218,21 @@ struct GhostMenuBarView: View {
 
     private var awakeCard: some View {
         HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "cup.and.saucer.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(controller.awakeOnlyActive ? .white : .secondary)
+                .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Mantener Mac despierto")
                     .font(.system(size: 13, weight: .medium))
-                Text("El sistema no dormirá; la pantalla sí puede apagarse")
+                Text("La pantalla sí puede apagarse")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
             Toggle("", isOn: Binding(
-                get: { controller.manualAwake },
-                set: { $0 ? controller.enable(.indefinite) : controller.disable() }
+                get: { controller.awakeOnlyActive },
+                set: { controller.setAwakeOnly($0) }
             ))
             .toggleStyle(.switch)
             .labelsHidden()
@@ -220,7 +253,7 @@ struct GhostMenuBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Modo Sonámbulo")
                     .font(.system(size: 13, weight: .medium))
-                Text("También mantiene la pantalla encendida")
+                Text("Mac despierto y pantalla siempre encendida")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
