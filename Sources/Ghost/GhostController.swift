@@ -47,6 +47,8 @@ final class GhostController: ObservableObject {
     @Published private(set) var hotkeyRegistered = false
     /// Modo tapa cerrada pedido por el usuario (solo actúa mientras el Mac está despierto).
     @Published private(set) var lidModeActive = false
+    /// Modo Sonámbulo: además del sistema, mantiene la pantalla encendida.
+    @Published private(set) var sleepwalkerActive = false
     /// Mostrando el diálogo de administrador para autorizar el Modo tapa cerrada.
     @Published private(set) var lidAuthorizing = false
     @Published var notice: String?
@@ -184,6 +186,7 @@ final class GhostController: ObservableObject {
     func disable() {
         manualAwake = false
         lidModeActive = false
+        sleepwalkerActive = false
         selectedDuration = nil
         sessionEndsAt = nil
         sessionTimer?.invalidate()
@@ -193,6 +196,26 @@ final class GhostController: ObservableObject {
 
     func toggleAwake() {
         manualAwake ? disable() : enable(.indefinite)
+    }
+
+    // MARK: - Modo Sonámbulo
+
+    /// Mantiene también la pantalla encendida (como Caffeine). En Modo Ghost se suelta
+    /// para poder apagarla, y vuelve al salir.
+    func setSleepwalker(_ on: Bool) {
+        guard on else {
+            sleepwalkerActive = false
+            reconcile()
+            return
+        }
+        if !manualAwake { enable(.indefinite) }
+        guard manualAwake else { return }
+        sleepwalkerActive = true
+        reconcile()
+    }
+
+    func toggleSleepwalker() {
+        setSleepwalker(!sleepwalkerActive)
     }
 
     // MARK: - Modo tapa cerrada
@@ -283,6 +306,7 @@ final class GhostController: ObservableObject {
         }
 
         ghostModeActive = true
+        reconcile() // suelta la aserción de pantalla del Modo Sonámbulo antes de apagarla
         onRequestClosePopover?()
 
         if forceCurtain || settings.useBlackCurtain {
@@ -299,7 +323,7 @@ final class GhostController: ObservableObject {
         ghostModeActive = false
         curtain.hide()
         power.wakeDisplay()
-        scheduleStatusWrite()
+        reconcile()
     }
 
     /// Espera a que se suelten las teclas/botones: el key-up del propio atajo o del clic
@@ -333,6 +357,7 @@ final class GhostController: ObservableObject {
         // Si el usuario despierta la pantalla con el ratón/teclado, el Modo Ghost termina.
         if !asleep, ghostModeActive, !curtain.isVisible, pendingDisplaySleep == nil {
             ghostModeActive = false
+            reconcile()
         }
         scheduleStatusWrite()
     }
@@ -341,6 +366,7 @@ final class GhostController: ObservableObject {
         curtainVisible = visible
         if !visible, ghostModeActive, !isDisplayAsleep, pendingDisplaySleep == nil {
             ghostModeActive = false
+            reconcile()
         }
         scheduleStatusWrite()
     }
@@ -447,6 +473,12 @@ final class GhostController: ObservableObject {
             notice = "macOS rechazó la aserción de energía. Revisa Console.app (proceso Ghost)."
         }
         applyLidMode(lidModeActive && shouldStayAwake)
+
+        let keepDisplayOn = sleepwalkerActive && shouldStayAwake && !ghostModeActive
+        if !power.setPreventDisplaySleep(keepDisplayOn), keepDisplayOn {
+            sleepwalkerActive = false
+            notice = "macOS rechazó mantener la pantalla encendida. Revisa Console.app (proceso Ghost)."
+        }
         let awake = power.isPreventingSleep
         if awake != isAwake { isAwake = awake }
         scheduleStatusWrite()
@@ -470,6 +502,7 @@ final class GhostController: ObservableObject {
     var statusLine: String {
         if batteryLockout { return "En pausa · batería baja" }
         if ghostModeActive { return curtainVisible ? "Modo Ghost · cortina negra" : "Modo Ghost · pantalla apagada" }
+        if manualAwake, sleepwalkerActive { return "Sonámbulo · pantalla siempre encendida" }
         if manualAwake, lidModeActive { return "Despierto · también con la tapa cerrada" }
         if manualAwake { return sessionEndsAt == nil ? "Despierto · sin límite" : "Despierto · temporizador" }
         if !triggerReasons.isEmpty { return "Despierto por " + triggerReasons.joined(separator: ", ") }
@@ -517,6 +550,12 @@ final class GhostController: ObservableObject {
             exitGhostMode()
         case "toggle-ghost":
             handleHotkey()
+        case "sonambulo-on", "sleepwalker-on":
+            setSleepwalker(true)
+        case "sonambulo-off", "sleepwalker-off":
+            setSleepwalker(false)
+        case "toggle-sonambulo", "toggle-sleepwalker":
+            toggleSleepwalker()
         case "lid-on":
             setLidMode(true)
         case "lid-off":
@@ -564,6 +603,7 @@ final class GhostController: ObservableObject {
             "on_ac=\(battery.isOnAC ? 1 : 0)",
             "battery_lockout=\(batteryLockout ? 1 : 0)",
             "lid=\(lidApplied ? 1 : 0)",
+            "sleepwalker=\(power.isPreventingDisplaySleep ? 1 : 0)",
             "hotkey=\(settings.hotkey.display)",
             "hotkey_ok=\(hotkeyRegistered ? 1 : 0)"
         ]

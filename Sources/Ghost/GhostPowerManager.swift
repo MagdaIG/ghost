@@ -10,9 +10,10 @@ import IOKit.pwr_mgt
 // macOS decide dormir en función de *aserciones* de energía (pmset -g assertions):
 //
 //  • PreventUserIdleSystemSleep  → el sistema (CPU, red, discos) no entra en reposo por
-//    inactividad. Es la ÚNICA aserción que Ghost mantiene. Funciona con batería y con corriente.
-//  • PreventUserIdleDisplaySleep → impediría que la pantalla se apague. Ghost NUNCA la crea,
-//    así que la pantalla sigue respetando el "apagar pantalla tras X minutos" del sistema.
+//    inactividad. Es la aserción principal de Ghost. Funciona con batería y con corriente.
+//  • PreventUserIdleDisplaySleep → impide que la pantalla se apague. Ghost SOLO la crea en
+//    Modo Sonámbulo (opción explícita del usuario) y la suelta mientras está en Modo Ghost;
+//    el resto del tiempo la pantalla respeta el "apagar pantalla tras X minutos" del sistema.
 //
 // Para el Modo Ghost se apaga la pantalla al instante con `pmset displaysleepnow`
 // (fallback: IORequestIdle en IODisplayWrangler). Para despertarla se declara actividad
@@ -158,6 +159,8 @@ final class GhostPowerManager: NSObject, ObservableObject {
 
     /// true mientras Ghost mantiene la aserción PreventUserIdleSystemSleep.
     @Published private(set) var isPreventingSleep = false
+    /// true mientras Ghost mantiene PreventUserIdleDisplaySleep (solo en Modo Sonámbulo).
+    @Published private(set) var isPreventingDisplaySleep = false
     /// Estado real de las pantallas según NSWorkspace (screensDidSleep / screensDidWake).
     @Published private(set) var isDisplayAsleep = false
     /// Momento del último despertar de pantalla (sirve para resolver la carrera del atajo).
@@ -165,6 +168,7 @@ final class GhostPowerManager: NSObject, ObservableObject {
 
     private var sleepAssertionID: IOPMAssertionID = 0
     private var sleepAssertionReason = ""
+    private var displayAssertionID: IOPMAssertionID = 0
     private var activityAssertionID: IOPMAssertionID = 0
     private var activityReleaseTask: Task<Void, Never>?
 
@@ -220,7 +224,36 @@ final class GhostPowerManager: NSObject, ObservableObject {
         return true
     }
 
+    /// Modo Sonámbulo: crea o libera la aserción que impide que la pantalla se apague.
+    @discardableResult
+    func setPreventDisplaySleep(_ enabled: Bool) -> Bool {
+        if enabled {
+            guard displayAssertionID == 0 else { return true }
+            var assertionID: IOPMAssertionID = 0
+            let result = IOPMAssertionCreateWithName(
+                kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                "Ghost: Modo Sonámbulo (pantalla encendida)" as CFString,
+                &assertionID
+            )
+            guard result == kIOReturnSuccess else {
+                NSLog("Ghost: no se pudo crear la aserción de pantalla (0x%08x)", result)
+                return false
+            }
+            displayAssertionID = assertionID
+            isPreventingDisplaySleep = true
+            return true
+        }
+
+        guard displayAssertionID != 0 else { return true }
+        IOPMAssertionRelease(displayAssertionID)
+        displayAssertionID = 0
+        isPreventingDisplaySleep = false
+        return true
+    }
+
     func releaseAll() {
+        setPreventDisplaySleep(false)
         setPreventSleep(false)
         releaseUserActivity()
     }

@@ -104,6 +104,17 @@ irregular.
 Si el MacBook está desenchufado y la batería baja del umbral (20 % por defecto), Ghost se
 desactiva solo y el Mac vuelve a poder dormir.
 
+### Modo Sonámbulo
+
+Por defecto Ghost deja que la pantalla se apague según tus ajustes. Si quieres que **la
+pantalla también siga encendida** (para leer, presentar, mirar un panel o un vídeo sin
+tocar nada), activa **«Modo Sonámbulo»** en el panel o usa `ghost sonambulo on`.
+
+- Activa también «Mantener Mac despierto» y se desactiva con él (o con el temporizador
+  o por batería baja).
+- Es compatible con el Modo Ghost: con `⇧⌘G` la pantalla se apaga igual y, al volver,
+  sigue encendida.
+
 ### Funcionar con la tapa cerrada
 
 Por defecto, macOS duerme el Mac al cerrar la tapa aunque haya apps pidiendo que siga
@@ -136,6 +147,7 @@ ghost on 2h           # durante 2 horas (también: 30, 45m, 1h30m)
 ghost sleep           # Modo Ghost: apaga la pantalla ya
 ghost curtain         # Modo Ghost con cortina negra
 ghost wake            # enciende la pantalla
+ghost sonambulo on|off  # mantener también la pantalla encendida
 ghost lid on|off      # seguir despierto con la tapa cerrada
 ghost off             # vuelve al reposo normal
 ghost status          # estado (añade --json para scripts)
@@ -155,6 +167,7 @@ Todo está disponible como URL, así que puedes usarlo desde la app **Atajos** (
 ghost://on            ghost://on?minutes=90     ghost://on?hours=2
 ghost://off           ghost://toggle            ghost://sleep
 ghost://wake          ghost://curtain           ghost://toggle-ghost
+ghost://sonambulo-on  ghost://sonambulo-off     ghost://toggle-sonambulo
 ghost://lid-on        ghost://lid-off           ghost://toggle-lid
 ghost://settings      ghost://quit
 ```
@@ -168,12 +181,12 @@ En Atajos también puedes usar «Ejecutar script de shell» con `/usr/local/bin/
 
 ## Cómo funciona
 
-macOS decide cuándo dormir según *aserciones de energía*. Ghost solo mantiene una:
+macOS decide cuándo dormir según *aserciones de energía*. Ghost usa estas dos:
 
 | Aserción | Efecto | Ghost |
 |---|---|---|
 | `PreventUserIdleSystemSleep` | El sistema no duerme por inactividad | ✅ la crea |
-| `PreventUserIdleDisplaySleep` | La pantalla no se apaga | ❌ nunca |
+| `PreventUserIdleDisplaySleep` | La pantalla no se apaga | Solo en Modo Sonámbulo, y la suelta en Modo Ghost |
 
 Así la pantalla sigue apagándose según tus ajustes, y además Ghost puede apagarla al
 momento con `pmset displaysleepnow` (o, como alternativa, `IORequestIdle` de IOKit). Para

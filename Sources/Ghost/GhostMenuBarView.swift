@@ -131,6 +131,7 @@ struct GhostMenuBarView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             awakeCard
+            sleepwalkerCard
             lidCard
             ghostModeButton
             timerSection
@@ -199,6 +200,34 @@ struct GhostMenuBarView: View {
             Toggle("", isOn: Binding(
                 get: { controller.manualAwake },
                 set: { $0 ? controller.enable(.indefinite) : controller.disable() }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .controlSize(.small)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(cardFill))
+    }
+
+    // MARK: Modo Sonámbulo
+
+    private var sleepwalkerCard: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "figure.walk")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(controller.sleepwalkerActive ? .white : .secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Modo Sonámbulo")
+                    .font(.system(size: 13, weight: .medium))
+                Text("También mantiene la pantalla encendida")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: Binding(
+                get: { controller.sleepwalkerActive },
+                set: { controller.setSleepwalker($0) }
             ))
             .toggleStyle(.switch)
             .labelsHidden()

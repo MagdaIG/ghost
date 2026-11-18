@@ -16,8 +16,9 @@
   `./uninstall.sh` quita la regla (puede pedir `sudo rm -rf /etc/sudoers.d/ghost`).
   Mientras está activo, el Mac no se duerme ni con la tapa cerrada: no lo guardes en una
   mochila o funda.
-- **Energía reversible:** crea una aserción `PreventUserIdleSystemSleep`, que macOS libera
-  automáticamente si Ghost se cierra o falla.
+- **Energía reversible:** crea una aserción `PreventUserIdleSystemSleep` (y, solo en Modo
+  Sonámbulo, `PreventUserIdleDisplaySleep`), que macOS libera automáticamente si Ghost se
+  cierra o falla.
 - **Datos locales:** preferencias en `~/Library/Preferences/dev.ghost.Ghost.plist` y un
   archivo de estado en `~/Library/Application Support/Ghost/status` (lo lee el comando `ghost`).
 
