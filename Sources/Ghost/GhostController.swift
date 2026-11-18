@@ -198,14 +198,39 @@ final class GhostController: ObservableObject {
         manualAwake ? disable() : enable(.indefinite)
     }
 
+    // MARK: - Despierto vs. Sonámbulo (excluyentes en la UI)
+
+    /// «Mantener Mac despierto» a secas: el Mac no duerme y la pantalla sí puede apagarse.
+    var awakeOnlyActive: Bool { manualAwake && !sleepwalkerActive }
+
+    /// Interruptor «Mantener Mac despierto». Si estaba en Sonámbulo, cambia a este modo.
+    func setAwakeOnly(_ on: Bool) {
+        if on {
+            if sleepwalkerActive {
+                sleepwalkerActive = false
+                reconcile()
+            } else if !manualAwake {
+                enable(.indefinite)
+            }
+        } else {
+            disable()
+        }
+    }
+
     // MARK: - Modo Sonámbulo
 
     /// Mantiene también la pantalla encendida (como Caffeine). En Modo Ghost se suelta
-    /// para poder apagarla, y vuelve al salir.
+    /// para poder apagarla, y vuelve al salir. Es excluyente con «Mantener Mac despierto»:
+    /// al apagarlo, el Mac vuelve a su reposo normal (salvo que el Modo tapa cerrada siga activo).
     func setSleepwalker(_ on: Bool) {
         guard on else {
-            sleepwalkerActive = false
-            reconcile()
+            guard sleepwalkerActive else { return }
+            if lidModeActive {
+                sleepwalkerActive = false
+                reconcile()
+            } else {
+                disable()
+            }
             return
         }
         if !manualAwake { enable(.indefinite) }

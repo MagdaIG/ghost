@@ -126,7 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = GhostIcon.image(for: GhostIcon.state(
             isAwake: controller.isAwake,
             ghostMode: controller.ghostModeActive,
-            lockout: controller.batteryLockout
+            lockout: controller.batteryLockout,
+            sleepwalker: controller.sleepwalkerActive
         ))
         button.appearsDisabled = !controller.isAwake && !controller.ghostModeActive
         button.toolTip = "Ghost — \(controller.statusLine)\nClic derecho: alternar · ⌥ clic: Modo Ghost"

@@ -71,6 +71,7 @@ Busca el **fantasma** en la barra de menú:
 |---|---|
 | Contorno con ojos abiertos (atenuado) | Inactivo: el Mac duerme con normalidad |
 | Relleno con ojos abiertos | Mac despierto (la pantalla puede apagarse) |
+| Relleno con ojos abiertos y una «z» | Modo Sonámbulo: despierto y con la pantalla siempre encendida |
 | Relleno con ojos cerrados | Modo Ghost: despierto y con la pantalla apagada |
 | Batería baja | En pausa por batería baja |
 
@@ -110,8 +111,10 @@ Por defecto Ghost deja que la pantalla se apague según tus ajustes. Si quieres 
 pantalla también siga encendida** (para leer, presentar, mirar un panel o un vídeo sin
 tocar nada), activa **«Modo Sonámbulo»** en el panel o usa `ghost sonambulo on`.
 
-- Activa también «Mantener Mac despierto» y se desactiva con él (o con el temporizador
-  o por batería baja).
+- Es **alternativo** a «Mantener Mac despierto»: al activar uno se desactiva el otro.
+  Al apagar Sonámbulo, el Mac vuelve a su reposo normal. El temporizador y la protección
+  de batería funcionan igual.
+- El icono de la barra muestra el fantasma con una **«z»**.
 - Es compatible con el Modo Ghost: con `⇧⌘G` la pantalla se apaga igual y, al volver,
   sigue encendida.
 
